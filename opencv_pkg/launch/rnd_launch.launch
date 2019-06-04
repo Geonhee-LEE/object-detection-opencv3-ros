@@ -1,0 +1,15 @@
+<launch>
+	<include file="$(find openni2_launch)/launch/openni2.launch">
+	</include>
+
+	<node name="img_proc" pkg="opencv_pkg" type="kinect_img_proc" >
+	</node> 
+	<node name="serial" pkg="serial_pkg" type="serial_pkg_node" >
+	</node>
+	<node name="rqt_reconfigure" pkg="dynamic_reconfigure_test" type="dynamic_reconfigure_test_exe">
+	</node>
+	<node name="rqt" pkg="rqt_gui" type="rqt_gui">
+	</node>
+
+	
+</launch>
