@@ -1,5 +1,5 @@
 # opencv-ros
-Image processing using opencv2 for Labeling and HSV
+Image processing using OpenCV for Labeling and HSV, Filtering
 
 I want to extract the object(e.g., enclosure) from image at the ROS kinectic version.
 
