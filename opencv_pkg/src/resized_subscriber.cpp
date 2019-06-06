@@ -1,4 +1,4 @@
-#include <rnd_ws/resized_subscriber.h>
+#include <resized_subscriber.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/imgproc/imgproc.hpp>
 

@@ -1,4 +1,4 @@
-#include <rnd_ws/labeling_geon.h>
+#include <labeling_geon.h>
 
 bool CLabeling::set_Label(cv::Mat mat, int param)
 {
@@ -7,14 +7,14 @@ bool CLabeling::set_Label(cv::Mat mat, int param)
 		//cv::line(mat,cv::Point(10,100),cv::Point(100,200),CV_RGB(0,0,255),2,8,5);
 		cv::Mat gray = cv::Mat::zeros(mat.size(), CV_8UC1);
 		mblob.SetParam(mat,param,1);
-		mblob.DoLabeling(gray);
+		mblob.DoLabeling(mat);
 		return true;
 
 	}
 	catch(cv::Exception& e)
 	{
 		const char* err =e.what();
-		std::cout << "exception caught: " <<err <<std::endl;
+		//std::cout << "exception caught: " <<err <<std::endl;
 		return false;
 	}
 }

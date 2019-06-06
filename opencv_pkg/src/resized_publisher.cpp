@@ -1,4 +1,4 @@
-#include <rnd_ws/resized_publisher.h>
+#include <resized_publisher.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <cv_bridge/cv_bridge.h>
 

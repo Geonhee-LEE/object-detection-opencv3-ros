@@ -111,22 +111,22 @@ include_directories(
 ## Declare a cpp library
  add_library(
 	resized_publisher
-	src/manifest.cpp
-	src/resized_publisher.cpp
-	src/resized_subscriber.cpp
+	#src/manifest.cpp
+	#src/resized_publisher.cpp
+	#src/resized_subscriber.cpp
 	src/labeling_geon.cpp
 	src/BlobLabeling.cpp
  )
 
 target_link_libraries(resized_publisher ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 ## Declare a cpp executable
-add_executable(kinect_img_proc src/class_tf.cpp)
+add_executable(labeling src/main.cpp src/labeling_geon.cpp src/BlobLabeling.cpp)
 ## Add cmake target dependencies of the executable/library
 ## as an example, nmessage headers may need to be generated before nodes
- add_dependencies(kinect_img_proc dynamic_reconfigure_test)
+# add_dependencies(kinect_img_proc dynamic_reconfigure_test)
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(kinect_img_proc
+ target_link_libraries(labeling
    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}
  )
 

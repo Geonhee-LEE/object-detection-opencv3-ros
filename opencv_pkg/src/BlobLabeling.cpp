@@ -1,4 +1,4 @@
-#include "rnd_ws/BlobLabeling.h"
+#include "BlobLabeling.h"
 
 /// @brief CBlobLabeling 생성자
 /// @remarks Labeling에 사용되는 각종 변수 초기화

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "rnd_ws/BlobLabeling.h"
-
+#include "BlobLabeling.h"
+#include "opencv2/imgproc/imgproc.hpp"
 
 class CLabeling
 {
