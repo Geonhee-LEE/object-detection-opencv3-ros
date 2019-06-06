@@ -49,17 +49,17 @@ find_package(OpenCV)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
- add_message_files(
-   FILES
-   ResizedImage.msg
- )
+# add_message_files(
+#   FILES
+#   ResizedImage.msg
+# )
 
 ## Generate services in the 'srv' folder
- add_service_files(
-   FILES
-   ImgData.srv
+# add_service_files(
+#   FILES
+#   ImgData.srv
 #   Service2.srv
- )
+# )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -110,7 +110,7 @@ include_directories(
 
 ## Declare a cpp library
  add_library(
-	resized_publisher
+	blob_labeling
 	#src/manifest.cpp
 	#src/resized_publisher.cpp
 	#src/resized_subscriber.cpp
@@ -118,7 +118,7 @@ include_directories(
 	src/BlobLabeling.cpp
  )
 
-target_link_libraries(resized_publisher ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(blob_labeling ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 ## Declare a cpp executable
 add_executable(labeling src/main.cpp src/labeling_geon.cpp src/BlobLabeling.cpp)
 ## Add cmake target dependencies of the executable/library
