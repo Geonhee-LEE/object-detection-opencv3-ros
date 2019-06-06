@@ -1,0 +1,19 @@
+<launch>
+	<include file="$(find opencv_apps)/launch/hsv_color_filter.launch">
+	</include>
+
+	<include file="$(find opencv_apps)/launch/hsv_two_filter.launch">
+	</include>
+
+	<node name="img_proc" pkg="opencv_pkg" type="labeling" >
+	</node> 
+
+	<node name="hsv_dyn_ref" pkg="rqt_reconfigure" type="rqt_reconfigure"/>
+
+
+
+
+
+
+	
+</launch>
