@@ -14,6 +14,9 @@
 #include <opencv2/core/mat.hpp>  
 #include <opencv2/imgcodecs.hpp>   
   
+
+#include "std_msgs/Float32MultiArray.h"
+
 using namespace cv;  
 using namespace std;  
 
@@ -44,7 +47,9 @@ class ImageConverter
   image_transport::Subscriber raw_image_sub_;
   image_transport::Publisher roi_image_pub_;
   image_transport::Publisher result_image_pub_;
+  ros::Publisher obj_center_pub_;
   int max_x, max_y, max_w, max_h;
+  int median_cen_x, median_cen_y, cnt;
   int roi_x, roi_y, roi_w, roi_h;
   int getROI_flg;
 
@@ -58,10 +63,13 @@ public:
     object_image_sub_ = it_.subscribe("/hsv_color_two_filter/image", 1, &ImageConverter::objImageCb, this);
     roi_image_pub_ = it_.advertise("/image_converter/output_video", 1);
     result_image_pub_ = it_.advertise("/image_converter/result", 1);
+		
+	obj_center_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("/object/center_pos", 100);
 
 	output_img=cv::Mat::zeros(240,320,CV_8UC3);	
 	max_x, max_y, max_w, max_h = 0, 0, 0, 0;
-	roi_x, roi_y, roi_w, roi_h = 0, 0, 0, 0;
+	roi_x, roi_y, roi_w, roi_h = 0, 0, 0, 0;	
+    median_cen_x, median_cen_y = 0, 0;
  	getROI_flg = false;
   }
 
@@ -94,6 +102,8 @@ public:
 	else 
 		ROS_INFO_STREAM( roi_x << ", " << roi_y << ", " << roi_w <<  ", " << roi_h);	
 	
+	  
+		
 	cv::waitKey(3);  
 	// Send the raw image for processing second HSV node.
     roi_image_pub_.publish(cv_ptr->toImageMsg());  
@@ -122,6 +132,24 @@ public:
 	//Object center point
 	ROS_INFO_STREAM( "Center_x: " << roi_x + max_x + max_w * 0.5 << ", Center_y "<< roi_y + max_y + max_h *0.5);
 	
+    median_cen_x += roi_x + max_x + max_w * 0.5;
+	median_cen_y += roi_y + max_y + max_h *0.5;
+	cnt++;
+	  
+	if(cnt == 10)
+	{		
+		//Send the object center position through ROS topic 
+		std_msgs::Float32MultiArray msg_array;
+		msg_array.data.push_back(median_cen_x*0.1f);
+		msg_array.data.push_back(median_cen_y*0.1f);
+		obj_center_pub_.publish(msg_array);
+		ROS_INFO_STREAM( "msg_array: " << msg_array);
+		
+		median_cen_x = 0;
+		median_cen_y = 0;
+		cnt = 0;
+	}
+	  
 	cv::waitKey(3);  
     result_image_pub_.publish(cv_ptr->toImageMsg());  	  
   }
