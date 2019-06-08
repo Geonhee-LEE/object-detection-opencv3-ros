@@ -96,12 +96,14 @@ public:
    	}
 	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(320,240),0,0,CV_INTER_NN);	  
 		 
-	//Show ROI image abouy object(enclosure)
-	if( roi_x + roi_w < cv_ptr->image.size().width && roi_y + roi_h < cv_ptr->image.size().height )
+	//Show ROI image about object(enclosure)
+	if( roi_w <= cv_ptr->image.size().width && roi_h <= cv_ptr->image.size().height )
+	{
 		cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
+	}
 	else 
-		ROS_INFO_STREAM( roi_x << ", " << roi_y << ", " << roi_w <<  ", " << roi_h);	
-	
+		ROS_INFO_STREAM( "NOT ROI: "<< roi_x << ", " << roi_y << ", " << roi_w <<  ", " << roi_h);	
+	  
 	  
 		
 	cv::waitKey(3);  
@@ -124,14 +126,13 @@ public:
       return;
    	}
 	  
-	namedWindow("Object Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
-	imshow("Object Labeling Image", getObjectImage(cv_ptr->image));			// Show our image inside it
-	
-	ROS_INFO_STREAM(roi_x << ", " << roi_y << ", " << roi_w <<  ", " << roi_h);
-	  
 	//Object center point
 	ROS_INFO_STREAM( "Center_x: " << roi_x + max_x + max_w * 0.5 << ", Center_y "<< roi_y + max_y + max_h *0.5);
 	
+	namedWindow("Object Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
+	imshow("Object Labeling Image", getObjectImage(cv_ptr->image));			// Show our image inside it
+	
+	  
     median_cen_x += roi_x + max_x + max_w * 0.5;
 	median_cen_y += roi_y + max_y + max_h *0.5;
 	cnt++;
@@ -230,7 +231,7 @@ public:
 		Mat img_roi = src_img(rect);
 
 		// show
-		//imshow("image", img_roi);
+		//imshow("raw_image", img_roi);
 		
 		return img_roi;
 	}
