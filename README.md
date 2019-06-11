@@ -21,7 +21,7 @@ As a result, I can extract the center of x, y about detected object.
 
 ## Tracking Image
 
-To obtain the center of desired object detection, I adjust the Kalman filter tracking algorithm. 
+To obtain the center position of desired object, I adjusted the Kalman filter tracking algorithm. 
 The process is based on the labeling and hsv, and Kalman filter tracking works including various conditions such as maximum labeling size, minimum labeling size.
 
 <pre><code> roslaunch opencv_pkg conveyer_object_detection.launch --screen </code></pre>
