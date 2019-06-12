@@ -9,7 +9,7 @@
 
   <arg name="h_limit_max" default="360" doc="The maximum allowed field value Hue" />
   <arg name="h_limit_min" default="0" doc="The minimum allowed field value Hue" />
-  <arg name="s_limit_max" default="68" doc="The maximum allowed field value Saturation" />
+  <arg name="s_limit_max" default="100" doc="The maximum allowed field value Saturation" />
   <arg name="s_limit_min" default="0" doc="The minimum allowed field value Saturation" />
   <arg name="v_limit_max" default="75" doc="The maximum allowed field value Value" />
   <arg name="v_limit_min" default="0" doc="The minimum allowed field value Value" />
