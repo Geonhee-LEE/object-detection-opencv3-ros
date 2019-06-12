@@ -13,19 +13,19 @@
 #include <sstream>
 #include <opencv2/core/mat.hpp>  
 #include <opencv2/imgcodecs.hpp>   
-  
 
+#include <opencv2/tracking.hpp>
+#include <opencv2/core/ocl.hpp>
+ 
+ 
 #include "std_msgs/Float32MultiArray.h"
 
+#define SSTR( x ) static_cast< std::ostringstream & >( ( std::ostringstream() << std::dec << x ) ).str()
+   
 using namespace cv;  
 using namespace std;  
 
 CLabeling label;
-static const std::string OPENCV_WINDOW = "IMAGE WINDOW";
-void transmission_data(std_msgs::String);
-cv::Mat img_proc(cv::Mat);
-cv::Mat output_img;
-
 
 CLabeling::CLabeling(void)
 {
@@ -48,11 +48,23 @@ class ImageConverter
   image_transport::Publisher roi_image_pub_;
   image_transport::Publisher result_image_pub_;
   ros::Publisher obj_center_pub_;
-  int max_x, max_y, max_w, max_h;
-  int median_cen_x, median_cen_y, cnt;
-  int roi_x, roi_y, roi_w, roi_h;
-  int getROI_flg;
+  
+  // img proc
+  cv::Mat img_proc(cv::Mat);
+  cv::Mat raw_img;
+  cv::Mat output_img;
+  cv::Mat roi_img;
+  cv::Mat object_img;
 
+  int obj_lab_x, obj_lab_y, obj_lab_w, obj_lab_h;
+  int mean_cen_x, mean_cen_y, cnt;
+  int roi_x, roi_y, roi_w, roi_h;
+  bool getROI_flg;
+  // For tracking
+  bool track_init;
+  Ptr<Tracker> tracker;
+  Rect2d bbox;
+	  
 public:
   ImageConverter()
     : it_(nh_)
@@ -66,11 +78,13 @@ public:
 		
 	obj_center_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("/object/center_pos", 100);
 
-	output_img=cv::Mat::zeros(240,320,CV_8UC3);	
-	max_x, max_y, max_w, max_h = 0, 0, 0, 0;
-	roi_x, roi_y, roi_w, roi_h = 0, 0, 0, 0;	
-    median_cen_x, median_cen_y = 0, 0;
+	output_img=cv::Mat::zeros(480,640,CV_8UC3);	
+	obj_lab_x, obj_lab_y, obj_lab_w, obj_lab_h = 0, 0, 0, 0;
+	roi_x = 0, roi_y = 0, roi_w = 0, roi_h = 0;	
+    mean_cen_x, mean_cen_y = 0, 0;
+	cnt = 0;
  	getROI_flg = false;
+	track_init = true;
   }
 
   ~ImageConverter()
@@ -94,11 +108,22 @@ public:
       ROS_ERROR("cv_bridge exception: %s", e.what());
       return;
    	}
-	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(320,240),0,0,CV_INTER_NN);	  
-		 
+	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);	  
+	raw_img = cv_ptr->image;
 	//Show ROI image about object(enclosure)
-	if( roi_w <= cv_ptr->image.size().width && roi_h <= cv_ptr->image.size().height )
+	if( roi_x + roi_w <= cv_ptr->image.size().width && roi_y + roi_h <= cv_ptr->image.size().height )
 	{
+		// ROI
+		if(roi_w >= cv_ptr->image.size().width * 0.95)
+		{
+			//coveyer size.y = (110, 240)
+			//cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
+			//cv_ptr->image = setROI(cv_ptr->image, 0, 110, 640, 240);
+		}
+		roi_x = 0;
+		roi_y = 110;
+		roi_w = 640;
+		roi_h = 130;
 		cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
 	}
 	else 
@@ -110,6 +135,81 @@ public:
 	// Send the raw image for processing second HSV node.
     roi_image_pub_.publish(cv_ptr->toImageMsg());  
 	getROI_flg = false;
+  }
+	
+  void tracking_object(cv::Mat frame, std::string trackerType)
+  {
+	  
+	if(track_init == true)
+	{
+		ROS_INFO_STREAM( "Init tracking");	
+	    // List of tracker types in OpenCV 3.4.1
+
+		#if (CV_MINOR_VERSION < 3)
+		{
+			tracker = Tracker::create(trackerType);
+		}
+		#else
+		{
+			if (trackerType == "BOOSTING")
+				tracker = TrackerBoosting::create();
+			if (trackerType == "MIL")
+				tracker = TrackerMIL::create();
+			if (trackerType == "KCF")
+				tracker = TrackerKCF::create();
+			if (trackerType == "TLD")
+				tracker = TrackerTLD::create();
+			if (trackerType == "MEDIANFLOW")
+				tracker = TrackerMedianFlow::create();
+			if (trackerType == "GOTURN")
+				tracker = TrackerGOTURN::create();
+			if (trackerType == "MOSSE")
+				tracker = TrackerMOSSE::create();
+		}
+		#endif     
+
+		// Define initial bounding box 		
+  		bbox = selectROI(frame);
+
+		// Uncomment the line below to select a different bounding box 
+		// bbox = selectROI(frame, false); 
+		// Display bounding box. 
+		rectangle(frame, bbox, Scalar( 255, 0, 0 ), 2, 1 ); 
+
+		imshow("Tracking", frame); 
+		tracker->init(frame, bbox);
+		track_init = false;
+	}
+     
+	ROS_INFO_STREAM( "Tracking");
+    
+	// Start timer
+    double timer = (double)getTickCount();
+         
+    // Update the tracking result
+    bool ok = tracker->update(frame, bbox);
+         
+    // Calculate Frames per second (FPS)
+    float fps = getTickFrequency() / ((double)getTickCount() - timer);
+       
+    if(ok)
+    {
+        // Tracking success : Draw the tracked object
+        rectangle(frame, bbox, Scalar( 255, 0, 0 ), 2, 1 );
+    }
+    else
+    {
+      // Tracking failure detected.
+      putText(frame, "Tracking failure detected", Point(100,80), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);
+    }
+         
+    // Display tracker type on frame
+    putText(frame, trackerType + " Tracker", Point(100,20), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(50,170,50),2);
+         
+    // Display FPS on frame
+    putText(frame, "FPS : " + SSTR(int(fps)), Point(100,50), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(50,170,50), 2);
+    // Display frame.
+    imshow("Tracking", frame); 
   }
 	
   void objImageCb(const sensor_msgs::ImageConstPtr& msg)
@@ -127,27 +227,38 @@ public:
    	}
 	  
 	//Object center point
-	ROS_INFO_STREAM( "Center_x: " << roi_x + max_x + max_w * 0.5 << ", Center_y "<< roi_y + max_y + max_h *0.5);
-	
+	//ROS_INFO_STREAM( "Center_x: " << roi_x + obj_lab_x + obj_lab_w * 0.5 << ", Center_y "<< roi_y + obj_lab_y + obj_lab_h *0.5);
+	cv::medianBlur(cv_ptr->image, cv_ptr->image, 5);
 	namedWindow("Object Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
-	imshow("Object Labeling Image", getObjectImage(cv_ptr->image));			// Show our image inside it
+	imshow("Object Labeling Image", getLabeledObjectImage(cv_ptr->image));			// Show our image inside it
 	
-	  
-    median_cen_x += roi_x + max_x + max_w * 0.5;
-	median_cen_y += roi_y + max_y + max_h *0.5;
+	// enclosure size: ( Object label: 338, 81)
+	//ROS_INFO_STREAM( "Object label: "<< max_w << ", " << max_h);	
+    mean_cen_x += roi_x + obj_lab_x + obj_lab_w * 0.5;
+	mean_cen_y += roi_y + obj_lab_y + obj_lab_h *0.5;
 	cnt++;
 	  
 	if(cnt == 10)
 	{		
+		
+		if( obj_lab_x + obj_lab_w <= cv_ptr->image.size().width && obj_lab_y + obj_lab_h <= cv_ptr->image.size().height )
+		{
+			object_img = setROI(raw_img, roi_x + obj_lab_x , roi_y + obj_lab_y,  obj_lab_w, obj_lab_h);
+			roi_img = setROI(raw_img, roi_x  , roi_y ,  roi_w, roi_h);
+			//Tracking function
+			tracking_object(roi_img, "KCF");
+		}
+
+
 		//Send the object center position through ROS topic 
 		std_msgs::Float32MultiArray msg_array;
-		msg_array.data.push_back(median_cen_x*0.1f);
-		msg_array.data.push_back(median_cen_y*0.1f);
+		msg_array.data.push_back(mean_cen_x*0.1f);
+		msg_array.data.push_back(mean_cen_y*0.1f);
 		obj_center_pub_.publish(msg_array);
-		ROS_INFO_STREAM( "msg_array: " << msg_array);
+		//ROS_INFO_STREAM( "msg_array: " << msg_array);
 		
-		median_cen_x = 0;
-		median_cen_y = 0;
+		mean_cen_x = 0;
+		mean_cen_y = 0;
 		cnt = 0;
 	}
 	  
@@ -168,7 +279,7 @@ public:
       ROS_ERROR("cv_bridge exception: %s", e.what());
       return;
    	}
-	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(320,240),0,0,CV_INTER_NN);
+	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);
 		 
 	namedWindow("Conveyer Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
 	imshow("Conveyer Labeling Image", img_main_proc(cv_ptr->image));						// Show our image inside it
@@ -179,6 +290,7 @@ public:
     //  cv::circle(cv_ptr->image, cv::Point(150, 150), 100, CV_RGB(255,0,0));
     // Output modified video stream
   }
+	
 	
 	
   cv::Mat img_main_proc(cv::Mat src_mat)
@@ -202,7 +314,7 @@ public:
 	  	src_mat = adjustFilter(src_mat);
 	  
 	  	//Labeling of maximum blob, 
-	  	out_img = drawLabelingImage(src_mat);
+	  	out_img = bgLabelingImage(src_mat);
 	  
 	  	return out_img;
 	}
@@ -210,12 +322,14 @@ public:
 	cv::Mat adjustFilter(Mat src_img)
 	{		
 		  // 필터 효과를 더 두드러지게 5x5 구조 요소를 사용
-		 cv::Mat element5(3, 3, CV_8U, cv::Scalar(1));
+		 cv::Mat element3(3, 3, CV_8U, cv::Scalar(1));
+		 cv::Mat element5(5, 5, CV_8U, cv::Scalar(1));
 		 cv::Mat return_img;				
 
 		 // 영상 닫힘과 영상 열림
-		 cv::morphologyEx(src_img,return_img,cv::MORPH_CLOSE,element5);
-		 cv::morphologyEx(return_img,return_img,cv::MORPH_OPEN,element5);
+		 cv::morphologyEx(src_img,return_img,cv::MORPH_CLOSE,element3);
+		 cv::morphologyEx(return_img,return_img,cv::MORPH_OPEN,element3);
+		 cv::dilate(return_img,return_img,element5);
 		 //cv::namedWindow("Closed Image");
 		 //cv::imshow("Closed Image", return_img);
 		
@@ -237,7 +351,7 @@ public:
 	}
 		
 	
-	cv::Mat getObjectImage(Mat image)
+	cv::Mat getLabeledObjectImage(Mat image)
 	{
 		Mat img_gray, img_labeling, img_binary;
 
@@ -284,19 +398,16 @@ public:
 		os << max_idx;
 		//std::cout << os.str() << std::endl;
 		putText(img_labeling, os.str(), Point(left + 20, top + 20), FONT_HERSHEY_SIMPLEX,	1, Scalar(255, 0, 0), 2);
-
-
 		
-		max_x = left;
-		max_y = top;
-		max_w = width;
-		max_h = height;
-		
+		obj_lab_x = left;
+		obj_lab_y = top;
+		obj_lab_w = width;
+		obj_lab_h = height;		
 		
 		return img_labeling;
 	}
 	
-	cv::Mat drawLabelingImage(Mat image)
+	cv::Mat bgLabelingImage(Mat image)
 	{
 		Mat img_gray, img_labeling, img_binary;
 
@@ -362,14 +473,14 @@ public:
 		//std::cout << os.str() << std::endl;
 		putText(img_labeling, os.str(), Point(left + 20, top + 20), FONT_HERSHEY_SIMPLEX,	1, Scalar(255, 0, 0), 2);
 
-
+		/* Foung the conveyer position
 		if( max_size > 0)
 		{
 			roi_x = left;
 			roi_y = top;
 			roi_w = width;
 			roi_h = height;
-		}
+		}*/
 		
 		
 		return img_labeling;
