@@ -217,6 +217,8 @@ public:
 		tracked_size = bbox.width * bbox.height;
         rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
 		ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
+		// Draw circle on the center, rectangle to the blob
+		circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);
     }
     else
     {		
