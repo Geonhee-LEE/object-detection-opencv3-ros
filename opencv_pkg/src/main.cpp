@@ -218,7 +218,13 @@ public:
         rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
 		ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
 		// Draw circle on the center, rectangle to the blob
-		circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);
+		circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);			
+		
+		//Send the object center position through ROS topic 
+		std_msgs::Float32MultiArray msg_array;
+		msg_array.data.push_back(bbox.x + bbox.width * 0.5);
+		msg_array.data.push_back(bbox.y +  bbox.height * 0.5);
+		obj_center_pub_.publish(msg_array);
     }
     else
     {		
@@ -281,11 +287,6 @@ public:
 			//Tracking function, find the object_img from roi_img
 			tracking_object(roi_img, object_img, "KCF");
 		}
-		//Send the object center position through ROS topic 
-		std_msgs::Float32MultiArray msg_array;
-		msg_array.data.push_back(mean_cen_x*0.1f);
-		msg_array.data.push_back(mean_cen_y*0.1f);
-		obj_center_pub_.publish(msg_array);
 		//ROS_INFO_STREAM( "msg_array: " << msg_array);		
 		mean_cen_x = 0;
 		mean_cen_y = 0;
