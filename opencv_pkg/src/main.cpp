@@ -223,7 +223,7 @@ public:
 		//Send the object center position through ROS topic 
 		std_msgs::Float32MultiArray msg_array;
 		msg_array.data.push_back(bbox.x + bbox.width * 0.5);
-		msg_array.data.push_back(bbox.y +  bbox.height * 0.5);
+		msg_array.data.push_back(bbox.y +  bbox.height * 0.5+roi_y);
 		obj_center_pub_.publish(msg_array);
     }
     else
