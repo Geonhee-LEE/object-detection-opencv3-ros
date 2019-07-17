@@ -70,6 +70,7 @@ class ImageConverter
   Ptr<Tracker> tracker;
   Rect2d bbox;
   uint16_t tracked_size;
+	
 	  
 public:
   ImageConverter()
@@ -222,8 +223,8 @@ public:
 		
 		//Send the object center position through ROS topic 
 		std_msgs::Float32MultiArray msg_array;
-		msg_array.data.push_back(bbox.x + bbox.width * 0.5);
-		msg_array.data.push_back(bbox.y +  bbox.height * 0.5+roi_y);
+		msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
+		msg_array.data.push_back(bbox.y +  bbox.height * 0.5+roi_y); //cur_y		
 		obj_center_pub_.publish(msg_array);
     }
     else
