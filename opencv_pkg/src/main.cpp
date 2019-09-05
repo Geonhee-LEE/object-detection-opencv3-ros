@@ -125,15 +125,19 @@ public:
 		// ROI
 		if(roi_w >= cv_ptr->image.size().width * 0.95)
 		{
-			//coveyer size.y = (110, 240)
+			//coveyer size.y in NSCL = (110, 240)
 			//cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
-			//cv_ptr->image = setROI(cv_ptr->image, 0, 110, 640, 240);
 		}
-		// Fixed variable about background(conveyer)
-		roi_x = 0;
+		// Fixed variable about background(conveyer) in NSCL
+		/*roi_x = 0;
 		roi_y = 110;
 		roi_w = 640;
-		roi_h = 130;
+		roi_h = 130;*/
+		// Fixed variable about background(conveyer) in Jinyoung
+		roi_x = 0;
+                roi_y = 70;
+		roi_w = 640;
+		roi_h = 150;
 		cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
 	}
 	else 
@@ -145,12 +149,13 @@ public:
 	getROI_flg = false;
   }
 	
+  // Object tracking function using KF
   void tracking_object(cv::Mat roi_img, cv::Mat obj_img, std::string trackerType)
   {	  
 	if(track_init == true)
 	{
 		ROS_INFO_STREAM( "Init tracking");	
-	    // List of tracker types in OpenCV 3.4.1
+                // List of tracker types in OpenCV 3.4.1
 		#if (CV_MINOR_VERSION < 3)
 		{
 			tracker = Tracker::create(trackerType);
@@ -185,7 +190,7 @@ public:
 		rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 ); 
 		
 		imshow("Tracking", roi_img); 
-		moveWindow("Tracking", 650,240);
+		moveWindow("Tracking", 100,240);
 		tracker->init(roi_img, bbox);
 		
 		// Fail to fine the labeling
@@ -196,7 +201,7 @@ public:
 		}
 
 		imshow("Bbox", object_img); 
-		moveWindow("Bbox", 650, 410);
+		moveWindow("Bbox", 100, 410);
 		track_init = false;
 	}
      
@@ -210,17 +215,18 @@ public:
          
     // Calculate Frames per second (FPS)
     float fps = getTickFrequency() / ((double)getTickCount() - timer);
+    float ang = static_cast<float>(bbox.height/bbox.width);
        
     if(ok)
     {
         // Tracking success : Draw the tracked object
 		fail_cnt = 0;
 		tracked_size = bbox.width * bbox.height;
-        rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
+                rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
 		ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
 		// Draw circle on the center, rectangle to the blob
 		circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);			
-		
+		                
 		//Send the object center position through ROS topic 
 		std_msgs::Float32MultiArray msg_array;
 		msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
@@ -239,14 +245,17 @@ public:
     }
          
     // Display tracker type on frame
-    putText(roi_img, trackerType + " Tracker", Point(100,20), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(50,170,50),2);
+    putText(roi_img, trackerType + " Tracker", Point(100,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),2);
          
     // Display FPS on frame
-    putText(roi_img, "FPS : " + SSTR(int(fps)), Point(100,50), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(50,170,50), 2);
+    putText(roi_img, "FPS : " + SSTR(int(fps)), Point(100,50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 2);
+    // Display angle on frame
+    putText(roi_img, "Ang : " + SSTR(float(ang)), Point(100,80), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 2);
     // Display frame.
     imshow("Tracking", roi_img); 
   }
-	
+
+  // Callback function about target img for img proc(enclosure)
   void objImageCb(const sensor_msgs::ImageConstPtr& msg)
   {
 	 cv_bridge::CvImagePtr cv_ptr;
@@ -263,14 +272,15 @@ public:
 	  
 	//Object center point
 	//ROS_INFO_STREAM( "Center_x: " << roi_x + obj_lab_x + obj_lab_w * 0.5 << ", Center_y "<< roi_y + obj_lab_y + obj_lab_h *0.5);
-	cv::medianBlur(cv_ptr->image, cv_ptr->image, 5);
+        // Filtering on the Conveyer
+        cv::medianBlur(cv_ptr->image, cv_ptr->image, 3);
 	namedWindow("Object Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
 	imshow("Object Labeling Image", getLabeledObjectImage(cv_ptr->image));			// Show our image inside it
-	moveWindow("Object Labeling Image", 650, 10);
+	moveWindow("Object Labeling Image", 100, 10);
 	
 	// enclosure size: ( Object label: 338, 81)
 	//ROS_INFO_STREAM( "Object label: "<< max_w << ", " << max_h);	
-    mean_cen_x += roi_x + obj_lab_x + obj_lab_w * 0.5;
+        mean_cen_x += roi_x + obj_lab_x + obj_lab_w * 0.5;
 	mean_cen_y += roi_y + obj_lab_y + obj_lab_h *0.5;
 	mean_cnt++;
 	  
@@ -294,61 +304,60 @@ public:
 		mean_cnt = 0;
 	}	  
 	cv::waitKey(3);  
-    result_image_pub_.publish(cv_ptr->toImageMsg());  	  
+        result_image_pub_.publish(cv_ptr->toImageMsg());
   }
  
- void bgImageCb(const sensor_msgs::ImageConstPtr& msg)
+  // Callback function about back ground img(conveyer)
+  void bgImageCb(const sensor_msgs::ImageConstPtr& msg)
   {
     cv_bridge::CvImagePtr cv_ptr;
 	
-	try
+    try
     {
       cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-   	}
-   	catch (cv_bridge::Exception& e)
-   	{
+    }
+    catch (cv_bridge::Exception& e)
+    {
       ROS_ERROR("cv_bridge exception: %s", e.what());
       return;
-   	}
-	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);
+    }
+    cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);
 		 
-	namedWindow("Conveyer Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
-	imshow("Conveyer Labeling Image", img_main_proc(cv_ptr->image));						// Show our image inside it
-	getROI_flg = true;
-	cv::waitKey(3);    
-	//Draw circle
-    //if (cv_ptr->image.rows > 60 && cv_ptr->image.cols > 60)
-    //  cv::circle(cv_ptr->image, cv::Point(150, 150), 100, CV_RGB(255,0,0));
-    // Output modified video stream
+    namedWindow("Conveyer Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
+    imshow("Conveyer Labeling Image",cv_ptr->image);						// Show our image inside it
+    getROI_flg = true;
+    cv::waitKey(3);
   }
-	
-  cv::Mat img_main_proc(cv::Mat src_mat)
-	{
-	  	cv::Mat out_img;
-		/* Private library usage
-		if(label.CLabeling::set_Label(src_mat, 1000) )
-		{
-			if(label.set_MaxLabel())
-			{
-				label.draw_MaxLabel(output_img,cvFIMA::Scalar(255,255,0),1);
-				ROS_INFO_STREAM(label.get_MaxLabel_FirstPt().x);	
-			}
-			else
-				ROS_INFO_STREAM("Finding the labeling fail!" );	
-		}
-		else
-			ROS_INFO_STREAM("Detection fail");
-		*/
-	  
-	  	src_mat = adjustFilter(src_mat);
-	  
-	  	//Labeling of maximum blob, 
-	  	out_img = bgLabelingImage(src_mat);
-	  
-	  	return out_img;
-	}
-	
-	cv::Mat adjustFilter(Mat src_img)
+
+
+  cv::Mat max_labeling_bg(cv::Mat src_mat)
+  {
+          cv::Mat out_img;
+          /* Private library usage
+                if(label.CLabeling::set_Label(src_mat, 1000) )
+                {
+                        if(label.set_MaxLabel())
+                        {
+                                label.draw_MaxLabel(output_img,cvFIMA::Scalar(255,255,0),1);
+                                ROS_INFO_STREAM(label.get_MaxLabel_FirstPt().x);
+                        }
+                        else
+                                ROS_INFO_STREAM("Finding the labeling fail!" );
+                }
+                else
+                        ROS_INFO_STREAM("Detection fail");
+                */
+
+          src_mat = adjustFilter(src_mat);
+
+          //Labeling of maximum blob,
+          out_img = bgLabelingImage(src_mat);
+
+          return out_img;
+  }
+
+  // Adjust filters
+  cv::Mat adjustFilter(Mat src_img)
 	{		
 		  // 필터 효과를 더 두드러지게 5x5 구조 요소를 사용
 		 cv::Mat element3(3, 3, CV_8U, cv::Scalar(1));
@@ -365,7 +374,8 @@ public:
 		return return_img;
 	}
 	
-	cv::Mat setROI(Mat src_img, int X, int Y, int W, int H)
+  // Set ROI
+  cv::Mat setROI(Mat src_img, int X, int Y, int W, int H)
 	{		
 		// 관심영역 설정 (set ROI (X, Y, Width, Height)).
 		Rect rect(X, Y, W, H);
@@ -379,8 +389,8 @@ public:
 		return img_roi;
 	}
 		
-	// Get the labeling of object(enclosure) 
-	cv::Mat getLabeledObjectImage(Mat image)
+  // Get the labeling of object(enclosure)
+  cv::Mat getLabeledObjectImage(Mat image)
 	{
 		Mat img_gray, img_labeling, img_binary;
 
@@ -442,7 +452,8 @@ public:
 		return img_labeling;
 	}
 	
-	cv::Mat bgLabelingImage(Mat image)
+  // Get the lebeling of background(conveyer)
+  cv::Mat bgLabelingImage(Mat image)
 	{
 		Mat img_gray, img_labeling, img_binary;
 
