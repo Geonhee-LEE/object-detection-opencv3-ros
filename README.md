@@ -42,4 +42,4 @@ After roscore or roslaunch,
 rosbag play ($bag_file_name) 
 ```
 
-you can check using rqt.
+you can check whether it works well using rqt.
