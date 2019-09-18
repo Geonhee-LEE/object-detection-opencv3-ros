@@ -29,3 +29,17 @@ The process is based on the labeling and hsv, and Kalman filter tracking works i
 
 ![Tracking](img/tracking.png)
 
+-------
+
+
+## How to play the rosbag file
+
+Download the bad files on the Google drive for NSCL account.
+
+After roscore or roslaunch,
+
+```
+rosbag play ($bag_file_name) 
+```
+
+you can check using rqt.
