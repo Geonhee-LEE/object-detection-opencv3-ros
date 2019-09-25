@@ -49,8 +49,8 @@ class ImageConverter
   cv::Mat roi_img;
   cv::Mat object_img;
 
-  int obj_lab_x, obj_lab_y, obj_lab_w, obj_lab_h;
-  int mean_cen_x, mean_cen_y, mean_cnt;
+  int obj_label_x, obj_label_y, obj_label_w, obj_label_h;
+  int mean_cnt;
   int roi_x, roi_y, roi_w, roi_h;
   bool getROI_flg;
 	
@@ -78,9 +78,8 @@ class ImageConverter
 		obj_center_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("/object/center_pos", 100);
 
 		output_img=cv::Mat::zeros(480,640,CV_8UC3);	
-		obj_lab_x, obj_lab_y, obj_lab_w, obj_lab_h = 0, 0, 0, 0;
+		obj_label_x, obj_label_y, obj_label_w, obj_label_h = 0, 0, 0, 0;
 		roi_x = 0, roi_y = 0, roi_w = 0, roi_h = 0;	
-		mean_cen_x, mean_cen_y = 0, 0;
 		mean_cnt = 0;
 		getROI_flg = false;
 		track_init = true;
@@ -94,6 +93,7 @@ class ImageConverter
     cv::destroyAllWindows();
   }
  
+	
   void rawImageCb(const sensor_msgs::ImageConstPtr& msg)
   {
 		if(!getROI_flg)
@@ -126,15 +126,15 @@ class ImageConverter
 				
 			cv::waitKey(3);  
 					
-  		Mat src, dst;
+  		Mat src, hist_equal_dst;
 			/// Convert to grayscale
-			cvtColor( cv_ptr->image, src, CV_BGR2GRAY );
+			cvtColor(cv_ptr->image, src, CV_BGR2GRAY );
 
 			/// Apply Histogram Equalization
-			equalizeHist( src, dst );
+			equalizeHist(src, hist_equal_dst);
 
 			namedWindow("Raw Image", WINDOW_AUTOSIZE);				// Create a window for display
-			imshow("Raw Labeling Image", dst);			// Show our image inside it
+			imshow("Raw Labeling Image", hist_equal_dst);			// Show our image inside it
 			moveWindow("Raw Labeling Image", move_win_x + 640, move_win_y);
 
 			// Send the raw image for processing second HSV node.
@@ -143,7 +143,7 @@ class ImageConverter
   }
 	
   // Object tracking function using KF
-  void tracking_object(cv::Mat roi_img, cv::Mat obj_img, std::string trackerType)
+  void tracking_object(cv::Mat _roi_img, cv::Mat obj_img, std::string trackerType)
   {	  
 		if(track_init == true)
 		{
@@ -171,23 +171,24 @@ class ImageConverter
 					tracker = TrackerMOSSE::create();
 			}
 			#endif     
+
 			// Define initial bounding box and set the labeled image as reference image  using labeling and hsv 	
-				bbox.x = obj_lab_x;// = selectROI(roi_img);
-				bbox.y = obj_lab_y;// = selectROI(roi_img);
-				bbox.width = obj_lab_w;// = selectROI(roi_img);
-				bbox.height = obj_lab_h;// = selectROI(roi_img);
+			bbox.x = obj_label_x; // = selectROI(roi_img);
+			bbox.y = obj_label_y; // = selectROI(roi_img);
+			bbox.width = obj_label_w; // = selectROI(roi_img);
+			bbox.height = obj_label_h; // = selectROI(roi_img);
 
 			// Uncomment the line below to select a different bounding box 
 			// bbox = selectROI(roi_img, false); 
 			// Display bounding box. 
-			rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 ); 
+			rectangle(_roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 ); 
 			
-			imshow("Tracking", roi_img); 
+			imshow("Tracking", _roi_img); 
 			moveWindow("Tracking", move_win_x, move_win_x +200);
-			tracker->init(roi_img, bbox);
+			tracker->init(_roi_img, bbox);
 			
 			// Fail to fine the labeling
-			if(bbox.x == 0 && bbox.y == 0  && bbox.width == roi_img.size().width && bbox.height == roi_img.size().height)
+			if(bbox.x == 0 && bbox.y == 0  && bbox.width == _roi_img.size().width && bbox.height == _roi_img.size().height)
 			{
 				destroyWindow("Bbox");
 				return ;					
@@ -204,7 +205,7 @@ class ImageConverter
     double timer = (double)getTickCount();
          
     // Update the tracking result
-    bool ok = tracker->update(roi_img, bbox);
+    bool ok = tracker->update(_roi_img, bbox);
          
     // Calculate Frames per second (FPS)
     float fps = getTickFrequency() / ((double)getTickCount() - timer);
@@ -212,40 +213,43 @@ class ImageConverter
        
     if(ok)
     {
-        // Tracking success : Draw the tracked object
+      // Tracking success : Draw the tracked object
 			fail_cnt = 0;
 			tracked_size = bbox.width * bbox.height;
-									rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
+									rectangle(_roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
 			ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
 			// Draw circle on the center, rectangle to the blob
-			circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);			
+			circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);	
 											
 			//Send the object center position through ROS topic 
 			std_msgs::Float32MultiArray msg_array;
 			msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
-			msg_array.data.push_back(bbox.y +  bbox.height * 0.5+roi_y); //cur_y		
+			msg_array.data.push_back(bbox.y +  bbox.height * 0.5+ roi_y); //cur_y		
 			obj_center_pub_.publish(msg_array);
 			}
 			else
 			{		
 				// Tracking failure detected.
-			fail_cnt++;
-			if(fail_cnt > 3)
-				track_init = true;
-		
-				putText(roi_img, "Tracking failure detected ", Point(100,80), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);
-			
+				fail_cnt++;
+				if(fail_cnt > 5)
+				{
+					track_init = true;		
+					putText(_roi_img, "Tracking failure detected ", Point(300,130), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);	
+				}		
 			}
-         
+    
+		// Offset point since shadow
+		circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  40), 3, Scalar(150, 170, 5), 3);			 
+
     // Display tracker type on frame
-    putText(roi_img, trackerType + " Tracker", Point(100,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),2);
+    putText(_roi_img, trackerType + " Tracker", Point(500,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),1);
          
     // Display FPS on frame
-    putText(roi_img, "FPS : " + SSTR(int(fps)), Point(100,50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 2);
+    putText(_roi_img, "FPS : " + SSTR(int(fps)), Point(500,50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
     // Display angle on frame
-    putText(roi_img, "Ang : " + SSTR(float(ang)), Point(100,80), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 2);
+    putText(_roi_img, "Ang : " + SSTR(float(ang)), Point(500,80), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
     // Display frame.
-    imshow("Tracking", roi_img); 
+    imshow("Tracking", _roi_img); 
   }
 
   // Callback function about target img for img proc(enclosure)
@@ -272,17 +276,15 @@ class ImageConverter
 		
 		// enclosure size: ( Object label: 338, 81)
 		//ROS_INFO_STREAM( "Object label: "<< max_w << ", " << max_h);	
-		mean_cen_x += roi_x + obj_lab_x + obj_lab_w * 0.5;
-		mean_cen_y += roi_y + obj_lab_y + obj_lab_h *0.5;
 		mean_cnt++;
 			
-		if(mean_cnt == 10)
+		if(mean_cnt == 5)
 		{		
 			// Kalman filter tracking
-			if( obj_lab_x + obj_lab_w <= cv_ptr->image.size().width && obj_lab_y + obj_lab_h <= cv_ptr->image.size().height )
+			if(obj_label_x + obj_label_w <= cv_ptr->image.size().width && obj_label_y + obj_label_h <= cv_ptr->image.size().height )
 			{
 				// object image
-				object_img = setROI(raw_img, roi_x + obj_lab_x , roi_y + obj_lab_y,  obj_lab_w, obj_lab_h);
+				object_img = setROI(raw_img, roi_x + obj_label_x , roi_y + obj_label_y,  obj_label_w, obj_label_h);
 				
 				// ROI image 
 				roi_img = setROI(raw_img, roi_x  , roi_y ,  roi_w, roi_h);
@@ -290,9 +292,6 @@ class ImageConverter
 				//Tracking function, find the object_img from roi_img
 				tracking_object(roi_img, object_img, "KCF");
 			}
-			//ROS_INFO_STREAM( "msg_array: " << msg_array);		
-			mean_cen_x = 0;
-			mean_cen_y = 0;
 			mean_cnt = 0;
 		}	  
 		cv::waitKey(3);  
@@ -436,10 +435,10 @@ class ImageConverter
 		//std::cout << os.str() << std::endl;
 		putText(img_labeling, os.str(), Point(left + 20, top + 20), FONT_HERSHEY_SIMPLEX,	1, Scalar(255, 0, 0), 2);
 		
-		obj_lab_x = left;
-		obj_lab_y = top;
-		obj_lab_w = width;
-		obj_lab_h = height;		
+		obj_label_x = left;
+		obj_label_y = top;
+		obj_label_w = width;
+		obj_label_h = height;		
 		
 		return img_labeling;
 	}
