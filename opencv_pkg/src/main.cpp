@@ -28,16 +28,6 @@
 using namespace cv;  
 using namespace std;  
 
-CLabeling label;
-
-CLabeling::CLabeling(void)
-{
-};
-
-CLabeling::~CLabeling(void)
-{
-};
-
 
 
 class ImageConverter
@@ -71,8 +61,10 @@ class ImageConverter
   Rect2d bbox;
   uint16_t tracked_size;
 	
-	  
-public:
+	// Window position
+	uint8_t move_win_x, move_win_y; 
+			
+	public:
   ImageConverter()
     : it_(nh_)
   {
@@ -82,18 +74,19 @@ public:
     object_image_sub_ = it_.subscribe("/hsv_color_two_filter/image", 1, &ImageConverter::objImageCb, this);
     roi_image_pub_ = it_.advertise("/image_converter/output_video", 1);
     result_image_pub_ = it_.advertise("/image_converter/result", 1);
-		
-	obj_center_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("/object/center_pos", 100);
+			
+		obj_center_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("/object/center_pos", 100);
 
-	output_img=cv::Mat::zeros(480,640,CV_8UC3);	
-	obj_lab_x, obj_lab_y, obj_lab_w, obj_lab_h = 0, 0, 0, 0;
-	roi_x = 0, roi_y = 0, roi_w = 0, roi_h = 0;	
-    mean_cen_x, mean_cen_y = 0, 0;
-	mean_cnt = 0;
- 	getROI_flg = false;
-	track_init = true;
-	fail_cnt = 0;
-	tracked_size = 0;
+		output_img=cv::Mat::zeros(480,640,CV_8UC3);	
+		obj_lab_x, obj_lab_y, obj_lab_w, obj_lab_h = 0, 0, 0, 0;
+		roi_x = 0, roi_y = 0, roi_w = 0, roi_h = 0;	
+		mean_cen_x, mean_cen_y = 0, 0;
+		mean_cnt = 0;
+		getROI_flg = false;
+		track_init = true;
+		fail_cnt = 0;
+		tracked_size = 0;
+		move_win_x = 150, move_win_y = 150;
   }
 
   ~ImageConverter()
@@ -103,111 +96,111 @@ public:
  
   void rawImageCb(const sensor_msgs::ImageConstPtr& msg)
   {
-	 if(!getROI_flg)
-	 	return ;
-	  
-	 cv_bridge::CvImagePtr cv_ptr;
-	
-	try
-    {
-      cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-   	}
-   	catch (cv_bridge::Exception& e)
-   	{
-      ROS_ERROR("cv_bridge exception: %s", e.what());
-      return;
-   	}
-	cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);	  
-	raw_img = cv_ptr->image;
-	//Show ROI image about object(enclosure)
-	if( roi_x + roi_w <= cv_ptr->image.size().width && roi_y + roi_h <= cv_ptr->image.size().height )
-	{
-		// ROI
-		if(roi_w >= cv_ptr->image.size().width * 0.95)
-		{
-			//coveyer size.y in NSCL = (110, 240)
-			//cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
-		}
-		// Fixed variable about background(conveyer) in NSCL
-		/*roi_x = 0;
-		roi_y = 110;
-		roi_w = 640;
-		roi_h = 130;*/
-		// Fixed variable about background(conveyer) in Jinyoung
-		roi_x = 0;
-                roi_y = 70;
-		roi_w = 640;
-		roi_h = 150;
-		cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
-	}
-	else 
-		ROS_INFO_STREAM( "NOT ROI: "<< roi_x << ", " << roi_y << ", " << roi_w <<  ", " << roi_h);	 
+		if(!getROI_flg)
+			return ;
+			
+		cv_bridge::CvImagePtr cv_ptr;
 		
-	cv::waitKey(3);  
-	// Send the raw image for processing second HSV node.
-    roi_image_pub_.publish(cv_ptr->toImageMsg());  
-	getROI_flg = false;
+			try
+				{
+					cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+				}
+				catch (cv_bridge::Exception& e)
+				{
+					ROS_ERROR("cv_bridge exception: %s", e.what());
+					return;
+				}
+			cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);	  
+			raw_img = cv_ptr->image;
+			//Show ROI image about object(enclosure)
+			if( roi_x + roi_w <= cv_ptr->image.size().width && roi_y + roi_h <= cv_ptr->image.size().height )
+			{
+				roi_x = 0;
+				roi_y = 70;
+				roi_w = 640;
+				roi_h = 150;
+				cv_ptr->image = setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h);
+			}
+			else 
+				ROS_INFO_STREAM( "NOT ROI: "<< roi_x << ", " << roi_y << ", " << roi_w <<  ", " << roi_h);	 
+				
+			cv::waitKey(3);  
+					
+  		Mat src, dst;
+			/// Convert to grayscale
+			cvtColor( cv_ptr->image, src, CV_BGR2GRAY );
+
+			/// Apply Histogram Equalization
+			equalizeHist( src, dst );
+
+			namedWindow("Raw Image", WINDOW_AUTOSIZE);				// Create a window for display
+			imshow("Raw Labeling Image", dst);			// Show our image inside it
+			moveWindow("Raw Labeling Image", move_win_x + 640, move_win_y);
+
+			// Send the raw image for processing second HSV node.
+			roi_image_pub_.publish(cv_ptr->toImageMsg());  
+			getROI_flg = false;
   }
 	
   // Object tracking function using KF
   void tracking_object(cv::Mat roi_img, cv::Mat obj_img, std::string trackerType)
   {	  
-	if(track_init == true)
-	{
-		ROS_INFO_STREAM( "Init tracking");	
-                // List of tracker types in OpenCV 3.4.1
-		#if (CV_MINOR_VERSION < 3)
+		if(track_init == true)
 		{
-			tracker = Tracker::create(trackerType);
-		}
-		#else
-		{
-			if (trackerType == "BOOSTING")
-				tracker = TrackerBoosting::create();
-			if (trackerType == "MIL")
-				tracker = TrackerMIL::create();
-			if (trackerType == "KCF")
-				tracker = TrackerKCF::create();
-			if (trackerType == "TLD")
-				tracker = TrackerTLD::create();
-			if (trackerType == "MEDIANFLOW")
-				tracker = TrackerMedianFlow::create();
-			if (trackerType == "GOTURN")
-				tracker = TrackerGOTURN::create();
-			if (trackerType == "MOSSE")
-				tracker = TrackerMOSSE::create();
-		}
-		#endif     
-		// Define initial bounding box and set the labeled image as reference image  using labeling and hsv 	
-  		bbox.x = obj_lab_x;// = selectROI(roi_img);
-  		bbox.y = obj_lab_y;// = selectROI(roi_img);
-  		bbox.width = obj_lab_w;// = selectROI(roi_img);
-  		bbox.height = obj_lab_h;// = selectROI(roi_img);
+			ROS_INFO_STREAM( "Init tracking");	
+									// List of tracker types in OpenCV 3.4.1
+			#if (CV_MINOR_VERSION < 3)
+			{
+				tracker = Tracker::create(trackerType);
+			}
+			#else
+			{
+				if (trackerType == "BOOSTING")
+					tracker = TrackerBoosting::create();
+				if (trackerType == "MIL")
+					tracker = TrackerMIL::create();
+				if (trackerType == "KCF")
+					tracker = TrackerKCF::create();
+				if (trackerType == "TLD")
+					tracker = TrackerTLD::create();
+				if (trackerType == "MEDIANFLOW")
+					tracker = TrackerMedianFlow::create();
+				if (trackerType == "GOTURN")
+					tracker = TrackerGOTURN::create();
+				if (trackerType == "MOSSE")
+					tracker = TrackerMOSSE::create();
+			}
+			#endif     
+			// Define initial bounding box and set the labeled image as reference image  using labeling and hsv 	
+				bbox.x = obj_lab_x;// = selectROI(roi_img);
+				bbox.y = obj_lab_y;// = selectROI(roi_img);
+				bbox.width = obj_lab_w;// = selectROI(roi_img);
+				bbox.height = obj_lab_h;// = selectROI(roi_img);
 
-		// Uncomment the line below to select a different bounding box 
-		// bbox = selectROI(roi_img, false); 
-		// Display bounding box. 
-		rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 ); 
-		
-		imshow("Tracking", roi_img); 
-		moveWindow("Tracking", 100,240);
-		tracker->init(roi_img, bbox);
-		
-		// Fail to fine the labeling
-		if(bbox.x == 0 && bbox.y == 0  && bbox.width == roi_img.size().width && bbox.height == roi_img.size().height)
-		{
-			destroyWindow("Bbox");
-			return ;					
-		}
+			// Uncomment the line below to select a different bounding box 
+			// bbox = selectROI(roi_img, false); 
+			// Display bounding box. 
+			rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 ); 
+			
+			imshow("Tracking", roi_img); 
+			moveWindow("Tracking", move_win_x, move_win_x +200);
+			tracker->init(roi_img, bbox);
+			
+			// Fail to fine the labeling
+			if(bbox.x == 0 && bbox.y == 0  && bbox.width == roi_img.size().width && bbox.height == roi_img.size().height)
+			{
+				destroyWindow("Bbox");
+				return ;					
+			}
 
-		imshow("Bbox", object_img); 
-		moveWindow("Bbox", 100, 410);
-		track_init = false;
-	}
+			imshow("Bbox", object_img); 
+			moveWindow("Bbox", move_win_x, move_win_y + 450);
+			track_init = false;
+		}
      
-	ROS_INFO_STREAM( "Tracking");
+		ROS_INFO_STREAM( "Tracking");
     
-	// Start timer
+		// Start timer
     double timer = (double)getTickCount();
          
     // Update the tracking result
@@ -220,29 +213,29 @@ public:
     if(ok)
     {
         // Tracking success : Draw the tracked object
-		fail_cnt = 0;
-		tracked_size = bbox.width * bbox.height;
-                rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
-		ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
-		// Draw circle on the center, rectangle to the blob
-		circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);			
-		                
-		//Send the object center position through ROS topic 
-		std_msgs::Float32MultiArray msg_array;
-		msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
-		msg_array.data.push_back(bbox.y +  bbox.height * 0.5+roi_y); //cur_y		
-		obj_center_pub_.publish(msg_array);
-    }
-    else
-    {		
-      // Tracking failure detected.
-	  fail_cnt++;
-	  if(fail_cnt > 3)
-		  track_init = true;
-	
-      putText(roi_img, "Tracking failure detected ", Point(100,80), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);
-	  
-    }
+			fail_cnt = 0;
+			tracked_size = bbox.width * bbox.height;
+									rectangle(roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
+			ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
+			// Draw circle on the center, rectangle to the blob
+			circle(roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);			
+											
+			//Send the object center position through ROS topic 
+			std_msgs::Float32MultiArray msg_array;
+			msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
+			msg_array.data.push_back(bbox.y +  bbox.height * 0.5+roi_y); //cur_y		
+			obj_center_pub_.publish(msg_array);
+			}
+			else
+			{		
+				// Tracking failure detected.
+			fail_cnt++;
+			if(fail_cnt > 3)
+				track_init = true;
+		
+				putText(roi_img, "Tracking failure detected ", Point(100,80), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);
+			
+			}
          
     // Display tracker type on frame
     putText(roi_img, trackerType + " Tracker", Point(100,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),2);
@@ -258,53 +251,52 @@ public:
   // Callback function about target img for img proc(enclosure)
   void objImageCb(const sensor_msgs::ImageConstPtr& msg)
   {
-	 cv_bridge::CvImagePtr cv_ptr;
-	
-	try
-    {
-      cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-   	}
-   	catch (cv_bridge::Exception& e)
-   	{
-      ROS_ERROR("cv_bridge exception: %s", e.what());
-      return;
-   	}
-	  
-	//Object center point
-	//ROS_INFO_STREAM( "Center_x: " << roi_x + obj_lab_x + obj_lab_w * 0.5 << ", Center_y "<< roi_y + obj_lab_y + obj_lab_h *0.5);
-        // Filtering on the Conveyer
-        cv::medianBlur(cv_ptr->image, cv_ptr->image, 3);
-	namedWindow("Object Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
-	imshow("Object Labeling Image", getLabeledObjectImage(cv_ptr->image));			// Show our image inside it
-	moveWindow("Object Labeling Image", 100, 10);
-	
-	// enclosure size: ( Object label: 338, 81)
-	//ROS_INFO_STREAM( "Object label: "<< max_w << ", " << max_h);	
-        mean_cen_x += roi_x + obj_lab_x + obj_lab_w * 0.5;
-	mean_cen_y += roi_y + obj_lab_y + obj_lab_h *0.5;
-	mean_cnt++;
-	  
-	if(mean_cnt == 10)
-	{		
-		// Kalman filter tracking
-		if( obj_lab_x + obj_lab_w <= cv_ptr->image.size().width && obj_lab_y + obj_lab_h <= cv_ptr->image.size().height )
-		{
-			// object image
-			object_img = setROI(raw_img, roi_x + obj_lab_x , roi_y + obj_lab_y,  obj_lab_w, obj_lab_h);
+		cv_bridge::CvImagePtr cv_ptr;
+		
+		try
+			{
+				cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+			}
+			catch (cv_bridge::Exception& e)
+			{
+				ROS_ERROR("cv_bridge exception: %s", e.what());
+				return;
+			}
 			
-			// ROI image 
-			roi_img = setROI(raw_img, roi_x  , roi_y ,  roi_w, roi_h);
+		// Object center point
+		// Filtering on the Conveyer
+		cv::medianBlur(cv_ptr->image, cv_ptr->image, 3);
+		namedWindow("Object Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
+		imshow("Object Labeling Image", getLabeledObjectImage(cv_ptr->image));			// Show our image inside it
+		moveWindow("Object Labeling Image", move_win_x, move_win_y);
+		
+		// enclosure size: ( Object label: 338, 81)
+		//ROS_INFO_STREAM( "Object label: "<< max_w << ", " << max_h);	
+		mean_cen_x += roi_x + obj_lab_x + obj_lab_w * 0.5;
+		mean_cen_y += roi_y + obj_lab_y + obj_lab_h *0.5;
+		mean_cnt++;
 			
-			//Tracking function, find the object_img from roi_img
-			tracking_object(roi_img, object_img, "KCF");
-		}
-		//ROS_INFO_STREAM( "msg_array: " << msg_array);		
-		mean_cen_x = 0;
-		mean_cen_y = 0;
-		mean_cnt = 0;
-	}	  
-	cv::waitKey(3);  
-        result_image_pub_.publish(cv_ptr->toImageMsg());
+		if(mean_cnt == 10)
+		{		
+			// Kalman filter tracking
+			if( obj_lab_x + obj_lab_w <= cv_ptr->image.size().width && obj_lab_y + obj_lab_h <= cv_ptr->image.size().height )
+			{
+				// object image
+				object_img = setROI(raw_img, roi_x + obj_lab_x , roi_y + obj_lab_y,  obj_lab_w, obj_lab_h);
+				
+				// ROI image 
+				roi_img = setROI(raw_img, roi_x  , roi_y ,  roi_w, roi_h);
+				
+				//Tracking function, find the object_img from roi_img
+				tracking_object(roi_img, object_img, "KCF");
+			}
+			//ROS_INFO_STREAM( "msg_array: " << msg_array);		
+			mean_cen_x = 0;
+			mean_cen_y = 0;
+			mean_cnt = 0;
+		}	  
+		cv::waitKey(3);  
+		result_image_pub_.publish(cv_ptr->toImageMsg());
   }
  
   // Callback function about back ground img(conveyer)
@@ -359,17 +351,17 @@ public:
   // Adjust filters
   cv::Mat adjustFilter(Mat src_img)
 	{		
-		  // 필터 효과를 더 두드러지게 5x5 구조 요소를 사용
-		 cv::Mat element3(3, 3, CV_8U, cv::Scalar(1));
-		 cv::Mat element5(5, 5, CV_8U, cv::Scalar(1));
-		 cv::Mat return_img;				
+		// 필터 효과를 더 두드러지게 5x5 구조 요소를 사용
+		cv::Mat element3(3, 3, CV_8U, cv::Scalar(1));
+		cv::Mat element5(5, 5, CV_8U, cv::Scalar(1));
+		cv::Mat return_img;				
 
-		 // 영상 닫힘과 영상 열림
-		 cv::morphologyEx(src_img,return_img,cv::MORPH_CLOSE,element3);
-		 cv::morphologyEx(return_img,return_img,cv::MORPH_OPEN,element3);
-		 cv::dilate(return_img,return_img,element5);
-		 //cv::namedWindow("Closed Image");
-		 //cv::imshow("Closed Image", return_img);
+		// 영상 닫힘과 영상 열림
+		cv::morphologyEx(src_img,return_img,cv::MORPH_CLOSE,element3);
+		cv::morphologyEx(return_img,return_img,cv::MORPH_OPEN,element3);
+		cv::dilate(return_img,return_img,element5);
+		//cv::namedWindow("Closed Image");
+		//cv::imshow("Closed Image", return_img);
 		
 		return return_img;
 	}
