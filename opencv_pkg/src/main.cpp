@@ -239,7 +239,7 @@ class ImageConverter
 			}
     
 		// Offset point since shadow
-		circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  40), 3, Scalar(150, 170, 5), 3);			 
+		circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y+ bbox.height - 40), 3, Scalar(0,0,255), 3);			 
 
     // Display tracker type on frame
     putText(_roi_img, trackerType + " Tracker", Point(500,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),1);
@@ -323,28 +323,13 @@ class ImageConverter
 
   cv::Mat max_labeling_bg(cv::Mat src_mat)
   {
-          cv::Mat out_img;
-          /* Private library usage
-                if(label.CLabeling::set_Label(src_mat, 1000) )
-                {
-                        if(label.set_MaxLabel())
-                        {
-                                label.draw_MaxLabel(output_img,cvFIMA::Scalar(255,255,0),1);
-                                ROS_INFO_STREAM(label.get_MaxLabel_FirstPt().x);
-                        }
-                        else
-                                ROS_INFO_STREAM("Finding the labeling fail!" );
-                }
-                else
-                        ROS_INFO_STREAM("Detection fail");
-                */
+		cv::Mat out_img;
+		src_mat = adjustFilter(src_mat);
 
-          src_mat = adjustFilter(src_mat);
+		//Labeling of maximum blob,
+		out_img = bgLabelingImage(src_mat);
 
-          //Labeling of maximum blob,
-          out_img = bgLabelingImage(src_mat);
-
-          return out_img;
+		return out_img;
   }
 
   // Adjust filters
