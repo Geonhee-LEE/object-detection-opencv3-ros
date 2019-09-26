@@ -38,8 +38,10 @@ class ImageConverter
   image_transport::Subscriber bg_image_sub_;
   image_transport::Subscriber object_image_sub_;
   image_transport::Subscriber raw_image_sub_;
+  image_transport::Subscriber depth_image_sub_;
   image_transport::Publisher roi_image_pub_;
   image_transport::Publisher result_image_pub_;
+	
   ros::Publisher obj_center_pub_;
   
   // img proc
@@ -48,6 +50,7 @@ class ImageConverter
   cv::Mat output_img;
   cv::Mat roi_img;
   cv::Mat object_img;
+  cv::Mat depth_img;
 
   int obj_label_x, obj_label_y, obj_label_w, obj_label_h;
   int mean_cnt;
@@ -72,6 +75,7 @@ class ImageConverter
     raw_image_sub_ = it_.subscribe("/camera1/color/image_raw", 1, &ImageConverter::rawImageCb, this);
     bg_image_sub_ = it_.subscribe("/hsv_color_filter/image", 1, &ImageConverter::bgImageCb, this);
     object_image_sub_ = it_.subscribe("/hsv_color_two_filter/image", 1, &ImageConverter::objImageCb, this);
+    depth_image_sub_ = it_.subscribe("/camera1/depth/image_raw", 1, &ImageConverter::depthImageCb, this);
     roi_image_pub_ = it_.advertise("/image_converter/output_video", 1);
     result_image_pub_ = it_.advertise("/image_converter/result", 1);
 			
@@ -93,6 +97,42 @@ class ImageConverter
     cv::destroyAllWindows();
   }
  
+  void depthImageCb(const sensor_msgs::ImageConstPtr& msg)
+  {
+		cv_bridge::CvImagePtr cv_ptr;
+
+		try
+		{
+			cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1); //uint16
+		}
+		catch (cv_bridge::Exception& e)
+		{
+			ROS_ERROR("cv_bridge exception: %s", e.what());
+			return;
+		}
+		cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480), 0, 0, CV_INTER_NN);	 
+		setROI(cv_ptr->image, roi_x, roi_y, roi_w, roi_h); // Setting ROI area for conveyer belt
+		depth_img = cv_ptr->image;
+
+		for(int y = 0; y < depth_img.rows; y++) 
+		{
+			for(int x = 0; x < depth_img.cols; x++) 
+			{
+					float distance = depth_img.at<float>(y, x);
+			}
+		}
+						
+		Mat src, hist_equal_dst;
+		/// Convert to grayscale
+		cvtColor(cv_ptr->image, src, CV_BGR2GRAY );
+
+		/// Apply Histogram Equalization
+		equalizeHist(src, hist_equal_dst);
+
+		namedWindow("Depth Image", WINDOW_AUTOSIZE);				// Create a window for display
+		imshow("Depth Image", depth_img);			// Show our image inside it
+		moveWindow("Depth Image", move_win_x + 640, move_win_y + 150);
+  }
 	
   void rawImageCb(const sensor_msgs::ImageConstPtr& msg)
   {
@@ -226,20 +266,26 @@ class ImageConverter
 			msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
 			msg_array.data.push_back(bbox.y +  bbox.height * 0.5+ roi_y); //cur_y		
 			obj_center_pub_.publish(msg_array);
-			}
-			else
-			{		
-				// Tracking failure detected.
-				fail_cnt++;
-				if(fail_cnt > 5)
-				{
-					track_init = true;		
-					putText(_roi_img, "Tracking failure detected ", Point(300,130), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);	
-				}		
-			}
+
+ 			cv::imwrite( "./Label.jpg", _roi_img );
+		}
+		else
+		{		
+			// Tracking failure detected.
+			fail_cnt++;
+			if(fail_cnt > 5)
+			{
+				track_init = true;		
+				putText(_roi_img, "Tracking failure detected ", Point(300,130), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);	
+			}		
+		}
     
 		// Offset point since shadow
-		circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y+ bbox.height - 40), 3, Scalar(0,0,255), 3);			 
+		circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y+ bbox.height - 40), 3, Scalar(0,0,255), 3);	
+
+		// Correct y coordinte for picking
+		uint8_t correct_arm_x_pixel = 200;
+		line(_roi_img, Point(correct_arm_x_pixel, 0), Point(correct_arm_x_pixel, roi_h), Scalar(255, 255, 255), 3);
 
     // Display tracker type on frame
     putText(_roi_img, trackerType + " Tracker", Point(500,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),1);
@@ -371,6 +417,8 @@ class ImageConverter
 		Mat img_gray, img_labeling, img_binary;
 
 		cvtColor(image, img_gray, COLOR_BGR2GRAY);	// Convert the image to Gray
+		/// Apply Histogram Equalization
+		equalizeHist(img_gray, img_gray);
 		threshold(img_gray, img_binary, 127, 255, THRESH_BINARY);
 		cvtColor(img_gray, img_labeling, COLOR_GRAY2BGR);
 
