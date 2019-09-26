@@ -93,7 +93,7 @@ class ImageConverter
 		tracked_size = 0;
 		move_win_x = 150, move_win_y = 150;
 		correct_arm_x_pixel = 200;
-		picking_x_pixel = 500;
+		picking_x_pixel = 600;
   }
 
   ~ImageConverter()
@@ -288,7 +288,7 @@ class ImageConverter
     putText(_roi_img, "Correct pt", Point(correct_arm_x_pixel+3,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,255,255),1);
 		// Get timing of picking
 		line(_roi_img, Point(picking_x_pixel, 0), Point(picking_x_pixel, roi_h), Scalar(255, 255, 255), 3);
-    putText(_roi_img, "Picking pt", Point(picking_x_pixel+3,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,255,255),1);
+    putText(_roi_img, "Picking pt", Point(picking_x_pixel+3,roi_h - 10 ), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,255,255),1);
 
     // Display tracker type on frame
     putText(_roi_img, trackerType + " Tracker", Point(500,50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),1);
@@ -481,7 +481,7 @@ class ImageConverter
 				max_size = width*height;
 				
 				// If the reference_img for tracking is lower than labling img + offset for preventing osillation, then change the reference img 
-				uint16_t offset = 2000;
+				uint16_t offset = 1000;
 				if(tracked_size + offset < max_size )
 					track_init = true;
 					
