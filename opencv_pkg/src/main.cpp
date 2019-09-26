@@ -63,6 +63,11 @@ class ImageConverter
   Ptr<Tracker> tracker;
   Rect2d bbox;
   uint16_t tracked_size;
+	Rect2d est_rect;
+
+
+	// Correct y coordinte for picking
+	uint8_t correct_arm_x_pixel;
 	
 	// Window position
 	uint8_t move_win_x, move_win_y; 
@@ -90,6 +95,7 @@ class ImageConverter
 		fail_cnt = 0;
 		tracked_size = 0;
 		move_win_x = 150, move_win_y = 150;
+		correct_arm_x_pixel = 200;
   }
 
   ~ImageConverter()
@@ -257,34 +263,28 @@ class ImageConverter
 			fail_cnt = 0;
 			tracked_size = bbox.width * bbox.height;
 									rectangle(_roi_img, bbox, Scalar( 255, 0, 0 ), 2, 1 );
-			ROS_INFO_STREAM( "bbox: "<< bbox.x << ", " << bbox.y << ", " << bbox.width <<  ", " << bbox.height);	
+			ROS_INFO_STREAM( "[bbox] x:"<< bbox.x << ", y:" << bbox.y << ", w:" << bbox.width <<  ", h" << bbox.height);	
 			// Draw circle on the center, rectangle to the blob
 			circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);	
 											
-			//Send the object center position through ROS topic 
-			std_msgs::Float32MultiArray msg_array;
-			msg_array.data.push_back(bbox.x + bbox.width * 0.5);	//cur_x
-			msg_array.data.push_back(bbox.y +  bbox.height * 0.5+ roi_y); //cur_y		
-			obj_center_pub_.publish(msg_array);
-
  			cv::imwrite( "./Label.jpg", _roi_img );
 		}
 		else
 		{		
 			// Tracking failure detected.
 			fail_cnt++;
-			if(fail_cnt > 5)
+			if(fail_cnt > 10)
 			{
 				track_init = true;		
 				putText(_roi_img, "Tracking failure detected ", Point(300,130), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);	
 			}		
 		}
     
+		est_rect = estimate_grasp_point(bbox);
 		// Offset point since shadow
-		circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y+ bbox.height - 40), 3, Scalar(0,0,255), 3);	
+		circle(_roi_img, Point(est_rect.x + est_rect.width * 0.5, est_rect.y+ est_rect.height - 40), 3, Scalar(0,0,255), 3);	
 
-		// Correct y coordinte for picking
-		uint8_t correct_arm_x_pixel = 200;
+		// Visualizing position of correction y position for picking
 		line(_roi_img, Point(correct_arm_x_pixel, 0), Point(correct_arm_x_pixel, roi_h), Scalar(255, 255, 255), 3);
 
     // Display tracker type on frame
@@ -296,7 +296,39 @@ class ImageConverter
     putText(_roi_img, "Ang : " + SSTR(float(ang)), Point(500,80), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
     // Display frame.
     imshow("Tracking", _roi_img); 
+
+		//Send the object center position through ROS topic 
+		std_msgs::Float32MultiArray msg_array;
+		msg_array.data.push_back(roi_x + est_rect.x + est_rect.width * 0.5);	// estimated grasp point x
+		msg_array.data.push_back(roi_y + est_rect.y + est_rect.height * 0.5 ); // estimated grasp point y		
+		obj_center_pub_.publish(msg_array);
   }
+
+	Rect2d estimate_grasp_point(Rect2d _bbox)
+	{
+		// Estimate grasp point based on tracking point & labeling point
+		Rect2d _est_rect;
+		uint16_t enclosure_w = 300;
+		uint16_t enclosure_h = 70;
+		uint16_t start_bound = 50;
+		uint16_t end_bound = 550; 
+
+		if(_bbox.x < start_bound)
+		{
+			_est_rect = _bbox;	
+			_est_rect.x  = _bbox.x - (enclosure_w - _bbox.width) * 0.5 ;
+		}
+		else if(_bbox.x > end_bound)
+		{
+			_est_rect = _bbox;	
+			_est_rect.x  = _bbox.x + (enclosure_w - _bbox.width) * 0.5 ;
+
+		}
+		else
+			_est_rect = _bbox;		
+
+		return _est_rect; 
+	}
 
   // Callback function about target img for img proc(enclosure)
   void objImageCb(const sensor_msgs::ImageConstPtr& msg)
@@ -324,7 +356,7 @@ class ImageConverter
 		//ROS_INFO_STREAM( "Object label: "<< max_w << ", " << max_h);	
 		mean_cnt++;
 			
-		if(mean_cnt == 5)
+		if(mean_cnt == 1)
 		{		
 			// Kalman filter tracking
 			if(obj_label_x + obj_label_w <= cv_ptr->image.size().width && obj_label_y + obj_label_h <= cv_ptr->image.size().height )
@@ -556,8 +588,6 @@ class ImageConverter
 		return img_labeling;
 	}
 };
-
-
 
 int main(int argc, char** argv)
 {
