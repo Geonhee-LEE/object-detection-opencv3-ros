@@ -2,18 +2,17 @@
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
-#include <opencv2/imgproc/imgproc.hpp>
 #include <std_msgs/String.h>
-#include <opencv2/highgui/highgui.hpp>
-#include <labeling_geon.h>
 #include <math.h>
 #include <queue>
 #include <iostream>  
 #include <string>
 #include <sstream>
+
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/mat.hpp>  
 #include <opencv2/imgcodecs.hpp>   
-
 #include <opencv2/tracking.hpp>
 #include <opencv2/core/ocl.hpp>
  
@@ -27,8 +26,6 @@
 
 using namespace cv;  
 using namespace std;  
-
-
 
 class ImageConverter
 {
@@ -65,9 +62,9 @@ class ImageConverter
   uint16_t tracked_size;
 	Rect2d est_rect;
 
-
 	// Correct y coordinte for picking
 	uint8_t correct_arm_x_pixel;
+	uint16_t picking_x_pixel;
 	
 	// Window position
 	uint8_t move_win_x, move_win_y; 
@@ -96,6 +93,7 @@ class ImageConverter
 		tracked_size = 0;
 		move_win_x = 150, move_win_y = 150;
 		correct_arm_x_pixel = 200;
+		picking_x_pixel = 500;
   }
 
   ~ImageConverter()
@@ -277,7 +275,7 @@ class ImageConverter
 			if(fail_cnt > 10)
 			{
 				track_init = true;		
-				putText(_roi_img, "Tracking failure detected ", Point(300,130), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);	
+				putText(_roi_img, "Tracking failure detected ", Point(300,150), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,255),2);	
 			}		
 		}
     
@@ -286,14 +284,18 @@ class ImageConverter
 
 		// Visualizing position of correction y position for picking
 		line(_roi_img, Point(correct_arm_x_pixel, 0), Point(correct_arm_x_pixel, roi_h), Scalar(255, 255, 255), 3);
+    putText(_roi_img, "Correct pt", Point(correct_arm_x_pixel+3,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,255,255),1);
+		// Get timing of picking
+		line(_roi_img, Point(picking_x_pixel, 0), Point(picking_x_pixel, roi_h), Scalar(255, 255, 255), 3);
+    putText(_roi_img, "Picking pt", Point(picking_x_pixel+3,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255,255,255),1);
 
     // Display tracker type on frame
-    putText(_roi_img, trackerType + " Tracker", Point(500,20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),1);
+    putText(_roi_img, trackerType + " Tracker", Point(500,50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50),1);
          
     // Display FPS on frame
-    putText(_roi_img, "FPS : " + SSTR(int(fps)), Point(500,50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
+    putText(_roi_img, "FPS : " + SSTR(int(fps)), Point(500,80), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
     // Display angle on frame
-    putText(_roi_img, "Ang : " + SSTR(float(ang)), Point(500,80), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
+    putText(_roi_img, "Ang : " + SSTR(float(ang)), Point(500,110), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(50,170,50), 1);
     // Display frame.
     imshow("Tracking", _roi_img); 
 
@@ -472,7 +474,7 @@ class ImageConverter
 			int height = stats.at<int>(j, CC_STAT_HEIGHT);
 
 			// Find the maximum rect
-			if(width*height >= max_size && width*height > MINIMUM_LABEL_SIZE && width*height < MAXIMUM_LABEL_SIZE )
+			if(width*height >= max_size && width*height > MINIMUM_LABEL_SIZE && width*height < MAXIMUM_LABEL_SIZE && width < 310 && height < 80)
 			{
 				max_idx = j;
 				max_size = width*height;
