@@ -264,8 +264,9 @@ class ImageConverter
 			ROS_INFO_STREAM( "[bbox] x:"<< bbox.x << ", y:" << bbox.y << ", w:" << bbox.width <<  ", h" << bbox.height);	
 			// Draw circle on the center, rectangle to the blob
 			circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);	
-											
- 			cv::imwrite( "./Label.jpg", _roi_img );
+
+			//save the reference img							
+ 			//cv::imwrite( "/home/geonhee/Desktop/Label.jpg", _roi_img );
 			est_rect = estimate_grasp_point(bbox);
 		}
 		else
@@ -299,7 +300,7 @@ class ImageConverter
     // Display frame.
     imshow("Tracking", _roi_img); 
 
-		//Send the object center position through ROS topic 
+		// Send the estimated position through ROS topic 
 		std_msgs::Float32MultiArray msg_array;
 		msg_array.data.push_back(roi_x + est_rect.x + est_rect.width * 0.5);	// estimated grasp point x
 		msg_array.data.push_back(roi_y + est_rect.y + est_rect.height * 0.5 ); // estimated grasp point y		
@@ -398,8 +399,8 @@ class ImageConverter
     }
     cv::resize(cv_ptr->image, cv_ptr->image, cv::Size(640, 480),0,0,CV_INTER_NN);
 		 
-    namedWindow("Conveyer Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
-    imshow("Conveyer Labeling Image",cv_ptr->image);						// Show our image inside it
+    //namedWindow("Conveyer Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
+    //imshow("Conveyer Labeling Image",cv_ptr->image);						// Show our image inside it
     getROI_flg = true;
     cv::waitKey(3);
   }
