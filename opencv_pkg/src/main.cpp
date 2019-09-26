@@ -177,7 +177,7 @@ class ImageConverter
 			/// Apply Histogram Equalization
 			equalizeHist(src, hist_equal_dst);
 
-			namedWindow("Raw Image", WINDOW_AUTOSIZE);				// Create a window for display
+			namedWindow("Raw Labeling Image", WINDOW_AUTOSIZE);				// Create a window for display
 			imshow("Raw Labeling Image", hist_equal_dst);			// Show our image inside it
 			moveWindow("Raw Labeling Image", move_win_x + 640, move_win_y);
 
