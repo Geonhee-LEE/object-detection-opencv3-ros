@@ -7,7 +7,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <labeling_geon.h>
 #include <math.h>
-
+#include <queue>
 #include <iostream>  
 #include <string>
 #include <sstream>
@@ -251,13 +251,13 @@ class ImageConverter
     double timer = (double)getTickCount();
          
     // Update the tracking result
-    bool ok = tracker->update(_roi_img, bbox);
+    bool success = tracker->update(_roi_img, bbox);
          
     // Calculate Frames per second (FPS)
     float fps = getTickFrequency() / ((double)getTickCount() - timer);
     float ang = static_cast<float>(bbox.height/bbox.width);
        
-    if(ok)
+    if(success)
     {
       // Tracking success : Draw the tracked object
 			fail_cnt = 0;
@@ -268,6 +268,7 @@ class ImageConverter
 			circle(_roi_img, Point(bbox.x + bbox.width * 0.5, bbox.y +  bbox.height * 0.5), 5, Scalar(255, 255, 0), 3);	
 											
  			cv::imwrite( "./Label.jpg", _roi_img );
+			est_rect = estimate_grasp_point(bbox);
 		}
 		else
 		{		
@@ -280,7 +281,6 @@ class ImageConverter
 			}		
 		}
     
-		est_rect = estimate_grasp_point(bbox);
 		// Offset point since shadow
 		circle(_roi_img, Point(est_rect.x + est_rect.width * 0.5, est_rect.y+ est_rect.height - 40), 3, Scalar(0,0,255), 3);	
 
@@ -304,7 +304,7 @@ class ImageConverter
 		obj_center_pub_.publish(msg_array);
   }
 
-	Rect2d estimate_grasp_point(Rect2d _bbox)
+	Rect2d estimate_grasp_point(Rect2d _detected_rect)
 	{
 		// Estimate grasp point based on tracking point & labeling point
 		Rect2d _est_rect;
@@ -313,20 +313,24 @@ class ImageConverter
 		uint16_t start_bound = 50;
 		uint16_t end_bound = 550; 
 
-		if(_bbox.x < start_bound)
-		{
-			_est_rect = _bbox;	
-			_est_rect.x  = _bbox.x - (enclosure_w - _bbox.width) * 0.5 ;
-		}
-		else if(_bbox.x > end_bound)
-		{
-			_est_rect = _bbox;	
-			_est_rect.x  = _bbox.x + (enclosure_w - _bbox.width) * 0.5 ;
 
+		// Before start position
+		if(_detected_rect.x < start_bound)
+		{
+			_est_rect = _detected_rect;	
+			_est_rect.x  = _detected_rect.x - (enclosure_w - _detected_rect.width) * 0.5;
+		}
+		else if(_detected_rect.x > end_bound)
+		{
+			_est_rect = _detected_rect;	
+			_est_rect.x  = _detected_rect.x + (enclosure_w - _detected_rect.width) * 0.5;
 		}
 		else
-			_est_rect = _bbox;		
-
+		{
+			_est_rect = _detected_rect;	
+			_est_rect.x  = _detected_rect.x;
+		}			
+		
 		return _est_rect; 
 	}
 
