@@ -13,7 +13,7 @@ As a result, I can extract the center of x, y about detected object.
 ![HSV & Labeling](img/raw_img.png)
 
 
-## Extracted Image(HSV and Labaled img)
+## Extracted Image(HSV and Labeled img)
 
 ![HSV & Labeling](img/result.png)
 
